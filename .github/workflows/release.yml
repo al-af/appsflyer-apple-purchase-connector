@@ -65,34 +65,21 @@ jobs:
           git tag -a "v${{ env.VERSION }}" -m "Release v${{ env.VERSION }}"
           git push origin "v${{ env.VERSION }}"
 
-      - name: Draft GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: "v${{ env.VERSION }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Zip XCFramework artifacts
         run: ./scripts/zip_artifacts.sh
 
-      - name: Upload static XCFramework zip
+      - name: Draft GitHub Release with XCFramework zips
         uses: softprops/action-gh-release@v1
         with:
           tag_name:    "v${{ env.VERSION }}"
-          asset_path:  purchase-connector-static.xcframework.zip
-          asset_name:  purchase-connector-static.xcframework.zip
+          name:        "v${{ env.VERSION }}"
+          draft:       true
+          files: |
+            purchase-connector-static.xcframework.zip
+            purchase-connector-dynamic.xcframework.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload dynamic XCFramework zip
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name:    "v${{ env.VERSION }}"
-          asset_path:  purchase-connector-dynamic.xcframework.zip
-          asset_name:  purchase-connector-dynamic.xcframework.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
       - name: Publish to CocoaPods
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
