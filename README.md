@@ -31,7 +31,7 @@ support@appsflyer.com
 
 ## <a id="plugin-build-for"> This Module is Built for
 - AppsFlyer SDK:
-- iOS AppsFlyer SDK **6.12.2** .
+- iOS AppsFlyer SDK **6.99.999** .
 - 6.8.0+: StoreKit 1 support
 - 6.16.2+: StoreKit 1 & 2 support
 - Minimum iOS Version: 12
