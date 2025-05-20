@@ -4,6 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/AppsFlyerSDK/android-purchase-connector/blob/main/LICENSE)
 
+
 🛠 In order for us to provide optimal support, we would kindly ask you to submit any issues to
 support@appsflyer.com
 
