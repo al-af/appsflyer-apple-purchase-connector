@@ -28,16 +28,8 @@ jobs:
 
       - name: Ensure XCFrameworks present
         run: |
-          # Verify primary XCFramework
-          if [ ! -d PurchaseConnector.xcframework ]; then
-            echo "ERROR: PurchaseConnector.xcframework missing" >&2
-            exit 1
-          fi
-          # Verify dynamic variant
-          if [ ! -d Dynamic/PurchaseConnector.xcframework ]; then
-            echo "ERROR: Dynamic/PurchaseConnector.xcframework missing" >&2
-            exit 1
-          fi
+          [ -d PurchaseConnector.xcframework ]        || (echo Missing root XCFramework && exit 1)
+          [ -d Dynamic/PurchaseConnector.xcframework ] || (echo Missing dynamic XCFramework && exit 1)
 
       - name: Update Carthage JSONs
         run: ./scripts/update_carthage.sh "${{ env.VERSION }}"
@@ -55,24 +47,44 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add Carthage/*.json PurchaseConnector.podspec Package.swift
-          git commit -m "chore: bump version to v${{ env.VERSION }}"
+          git commit -m "Bump version to v${{ env.VERSION }}"
           git push
 
-      - name: Create annotated tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git tag -a "v${{ env.VERSION }}" -m "Release v${{ env.VERSION }}"
-          git push origin "v${{ env.VERSION }}"
-
-      - name: Draft GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Create annotated tag & draft release
+        id: create_release
+        uses: actions/create-release@v1
         with:
-          tag_name: "v${{ env.VERSION }}"
+          tag_name:    "v${{ env.VERSION }}"
+          release_name: "v${{ env.VERSION }}"
+          draft:       true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Zip XCFrameworks
+        run: |
+          # static
+          zip -r purchase-connector-static.xcframework.zip PurchaseConnector.xcframework
+          # dynamic
+          zip -r purchase-connector-dynamic.xcframework.zip Dynamic/PurchaseConnector.xcframework
+
+      - name: Upload static XCFramework Zip
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url:    ${{ steps.create_release.outputs.upload_url }}
+          asset_path:    purchase-connector-static.xcframework.zip
+          asset_name:    purchase-connector-static.xcframework.zip
+          asset_content_type: application/zip
+
+      - name: Upload dynamic XCFramework Zip
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url:    ${{ steps.create_release.outputs.upload_url }}
+          asset_path:    purchase-connector-dynamic.xcframework.zip
+          asset_name:    purchase-connector-dynamic.xcframework.zip
+          asset_content_type: application/zip
 
       - name: Publish to CocoaPods
+        if: secrets.COCOAPODS_TRUNK_TOKEN != ''
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
         run: |
