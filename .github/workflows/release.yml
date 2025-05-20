@@ -73,7 +73,7 @@ jobs:
         with:
           tag_name:    "v${{ env.VERSION }}"
           name:        "v${{ env.VERSION }}"
-          draft:       true
+          draft:       false
           files: |
             purchase-connector-static.xcframework.zip
             purchase-connector-dynamic.xcframework.zip
