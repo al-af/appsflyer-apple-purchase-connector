@@ -83,8 +83,7 @@ jobs:
           asset_name:    purchase-connector-dynamic.xcframework.zip
           asset_content_type: application/zip
 
-      - name: Publish to CocoaPods
-        if: secrets.COCOAPODS_TRUNK_TOKEN != ''
+     - name: Publish to CocoaPods
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
         run: |
