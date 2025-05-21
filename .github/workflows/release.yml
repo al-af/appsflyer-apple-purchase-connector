@@ -127,7 +127,7 @@ jobs:
             Package.swift
           # Update the checksum
           sed -i.bak -E \
-            "s|checksum: \"[0-9a-f]{64}\"|checksum: \"${NEW_CHECKSUM}\"|" \
+            's|(checksum:[[:space:]]*")[^"]*(")|\1'"$NEW_CHECKSUM"'\2|' \
             Package.swift
           # Commit & push to dev/test_workflow
           git config user.name "github-actions"
