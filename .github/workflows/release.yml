@@ -94,6 +94,7 @@ jobs:
           git push
           
       - name: Publish to CocoaPods
+        continue-on-error: true 
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
         run: |
