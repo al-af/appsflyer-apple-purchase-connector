@@ -94,7 +94,7 @@ jobs:
           git push
           
       - name: Publish to CocoaPods
-        continue-on-error: true 
+        continue-on-error: true
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
         run: |
@@ -111,27 +111,24 @@ jobs:
           ref:        dev/test_workflow
           fetch-depth: 0
 
-      - name: Copy XCFramework zip and compute checksum
+      - name: Update Dynamic SPM Package.swift
         run: |
           cp purchase-connector-dynamic.xcframework.zip spm-dynamic/
           cd spm-dynamic
+          
+          #Compute checksum
           NEW_CHECKSUM=$(swift package compute-checksum purchase-connector-dynamic.xcframework.zip)
           echo "Computed checksum: $NEW_CHECKSUM"
-
-      - name: Bump URL & checksum in Dynamic Package.swift
-        run: |
-          cd spm-dynamic
-          # Update the binaryTarget URL
-          sed -i.bak -E \
-            "s|url: \"[^\"]+releases/download/[0-9]+\.[0-9]+\.[0-9]+/purchase-connector-dynamic\\.xcframework\\.zip\"|url: \"https://github.com/AppsFlyerSDK/appsflyer-apple-purchase-connector/releases/download/${{ env.VERSION }}/purchase-connector-dynamic.xcframework.zip\"|" \
-            Package.swift
-          # Update the checksum
-          sed -i.bak -E \
-            's|(checksum:[[:space:]]*")[^"]*(")|\1'"$NEW_CHECKSUM"'\2|' \
-            Package.swift
-          # Commit & push to dev/test_workflow
+          
+          #Update URL version
+          sed -i.bak -E "s|url: \"[^\"]+releases/download/[0-9]+\.[0-9]+\.[0-9]+/purchase-connector-dynamic\.xcframework\.zip\"|url: \"https://github.com/AppsFlyerSDK/appsflyer-apple-purchase-connector/releases/download/${VERSION}/purchase-connector-dynamic.xcframework.zip\"|" Package.swift
+          
+          #Update checksum
+          sed -i.bak -E 's|checksum:[[:space:]]*".*"|checksum: "'"$NEW_CHECKSUM""|' Package.swift
+          
+          #Push changes
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add Package.swift
-          git commit -m "chore(spm-dynamic): bump to v${{ env.VERSION }}" || echo "Nothing to commit"
+          git commit -m "chore(spm-dynamic): bump to v${VERSION}" || echo "Nothing to commit"
           git push origin dev/test_workflow
