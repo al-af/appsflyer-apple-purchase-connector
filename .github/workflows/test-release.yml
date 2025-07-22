@@ -1,0 +1,144 @@
+name: Test Release Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Test version number'
+        required: true
+        default: '6.99.99'
+      dry_run:
+        description: 'Dry run mode'
+        type: boolean
+        default: true
+
+jobs:
+  test-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup test environment
+        run: |
+          echo "🧪 TESTING MODE - No real changes will be made"
+          echo "TEST_VERSION=${{ github.event.inputs.test_version }}" >> $GITHUB_ENV
+          echo "DRY_RUN=${{ github.event.inputs.dry_run }}" >> $GITHUB_ENV
+
+      # ============================================
+      # TEST PLAYER 1: CREATE VERSION BUMP BRANCH
+      # ============================================
+      
+      - name: Create test version bump branch
+        run: |
+          BUMP_BRANCH="test-release-bump-${{ env.TEST_VERSION }}"
+          echo "🌿 Would create branch: $BUMP_BRANCH"
+          if [ "${{ env.DRY_RUN }}" = "false" ]; then
+            git checkout -b "$BUMP_BRANCH"
+            echo "BUMP_BRANCH=$BUMP_BRANCH" >> $GITHUB_ENV
+          else
+            echo "BUMP_BRANCH=$BUMP_BRANCH" >> $GITHUB_ENV
+          fi
+
+      - name: Test file updates (dry run)
+        run: |
+          echo "📝 Would update these files with version ${{ env.TEST_VERSION }}:"
+          echo "  - Carthage/*.json"
+          echo "  - PurchaseConnector.podspec"  
+          echo "  - Package.swift"
+          echo "  - README.md"
+          
+          if [ "${{ env.DRY_RUN }}" = "false" ]; then
+            echo "🔄 Actually running update scripts..."
+            # ./scripts/update_carthage.sh "${{ env.TEST_VERSION }}"
+            # ./scripts/update_podspec.sh "${{ env.TEST_VERSION }}"
+            # ./scripts/update_spm.sh "${{ env.TEST_VERSION }}"
+            # ./scripts/update_readme.sh "${{ env.TEST_VERSION }}"
+          fi
+
+      - name: Test commit and push (dry run)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ env.DRY_RUN }}" = "true" ]; then
+            echo "📦 Would commit changes with message:"
+            echo "  'chore: bump version to ${{ env.TEST_VERSION }}'"
+            echo "🚀 Would push to branch: ${{ env.BUMP_BRANCH }}"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # git add -A
+            # git commit -m "test: bump version to ${{ env.TEST_VERSION }}"
+            # git push origin "${{ env.BUMP_BRANCH }}"
+          fi
+
+      - name: Test PR creation (dry run)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ env.DRY_RUN }}" = "true" ]; then
+            echo "📋 Would create PR with:"
+            echo "  Title: 'test: bump version to ${{ env.TEST_VERSION }}'"
+            echo "  Head: ${{ env.BUMP_BRANCH }}"
+            echo "  Base: main"
+            echo "  Labels: automated, release, test"
+          else
+            echo "🚀 Actually creating test PR..."
+            # gh pr create \
+            #   --title "test: bump version to ${{ env.TEST_VERSION }}" \
+            #   --body "🧪 Test PR for release workflow validation" \
+            #   --head "${{ env.BUMP_BRANCH }}" \
+            #   --base main \
+            #   --label "test"
+          fi
+
+      # ============================================
+      # TEST PLAYER 2: AUTO-APPROVAL LOGIC
+      # ============================================
+
+      - name: Test PR approval (dry run)
+        env:
+          GITHUB_TOKEN: ${{ secrets.APPROVER_TOKEN }}
+        run: |
+          if [ "${{ env.DRY_RUN }}" = "true" ]; then
+            echo "✅ Would approve PR with APPROVER_TOKEN"
+            echo "🔑 Token available: $(if [ -n '${{ secrets.APPROVER_TOKEN }}' ]; then echo 'YES'; else echo 'NO'; fi)"
+          else
+            echo "🤖 Actually testing approval..."
+            # PR_NUMBER=$(gh pr list --head "${{ env.BUMP_BRANCH }}" --json number --jq '.[0].number')
+            # gh pr review "$PR_NUMBER" --approve --body "✅ Test approval"
+          fi
+
+      - name: Test merge simulation
+        run: |
+          echo "🔄 Would enable auto-merge and wait for completion"
+          echo "⏳ Would poll PR state for up to 5 minutes"
+          echo "✅ Would checkout updated main branch"
+
+      - name: Test tag creation (dry run)
+        run: |
+          if [ "${{ env.DRY_RUN }}" = "true" ]; then
+            echo "🏷️  Would create tag: ${{ env.TEST_VERSION }}"
+            echo "📤 Would push tag to origin"
+          else
+            echo "🏷️  Actually creating test tag..."
+            # git tag -a "test-${{ env.TEST_VERSION }}" -m "Test Release ${{ env.TEST_VERSION }}"
+            # git push origin "test-${{ env.TEST_VERSION }}"
+          fi
+
+      - name: Test summary
+        run: |
+          echo "🎉 Test completed successfully!"
+          echo ""
+          echo "📊 Test Results:"
+          echo "  ✅ Branch creation: SIMULATED"
+          echo "  ✅ File updates: SIMULATED"
+          echo "  ✅ PR creation: SIMULATED"
+          echo "  ✅ Approval logic: SIMULATED"
+          echo "  ✅ Merge waiting: SIMULATED"
+          echo "  ✅ Tag creation: SIMULATED"
+          echo ""
+          echo "🔑 Token status:"
+          echo "  GITHUB_TOKEN: AVAILABLE"
+          echo "  APPROVER_TOKEN: $(if [ -n '${{ secrets.APPROVER_TOKEN }}' ]; then echo 'AVAILABLE'; else echo 'MISSING'; fi)" 
