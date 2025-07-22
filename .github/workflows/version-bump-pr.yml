@@ -1,0 +1,206 @@
+name: Version Bump PR
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      repository:
+        required: true
+        type: string
+      target-branch:
+        required: true
+        type: string
+      is-dynamic-repo:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+      approver-token:
+        required: true
+
+jobs:
+  create-version-bump-pr:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ inputs.repository }}
+          token: ${{ secrets.github-token }}
+          path: ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+
+      - name: Setup dynamic repo artifacts
+        if: inputs.is-dynamic-repo
+        run: |
+          # Copy dynamic XCFramework from main release
+          cp ../purchase-connector-dynamic.xcframework.zip dynamic-repo/
+
+      - name: Create version bump branch
+        run: |
+          cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+          BUMP_BRANCH="release-bump-${{ inputs.version }}"
+          git checkout -b "$BUMP_BRANCH"
+          echo "BUMP_BRANCH=$BUMP_BRANCH" >> $GITHUB_ENV
+
+      - name: Update version files
+        run: |
+          cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+          
+          if [ "${{ inputs.is-dynamic-repo }}" = "true" ]; then
+            # Update Package.swift for dynamic repo
+            NEW_CHECKSUM=$(swift package compute-checksum purchase-connector-dynamic.xcframework.zip)
+            sed -i.bak -E "s|url: \"[^\"]+releases/download/[0-9]+\.[0-9]+\.[0-9]+/purchase-connector-dynamic\.xcframework\.zip\"|url: \"https://github.com/AppsFlyerSDK/appsflyer-apple-purchase-connector/releases/download/${{ inputs.version }}/purchase-connector-dynamic.xcframework.zip\"|" Package.swift
+            sed -i.bak -E 's|checksum:[[:space:]]*\".*\"|checksum: \"'"${NEW_CHECKSUM}"'\"|' Package.swift
+          else
+            # Update main repo files
+            ./scripts/update_carthage.sh "${{ inputs.version }}"
+            ./scripts/update_podspec.sh "${{ inputs.version }}"
+            ./scripts/update_spm.sh "${{ inputs.version }}"
+            ./scripts/update_readme.sh "${{ inputs.version }}"
+          fi
+
+      - name: Commit and push changes
+        run: |
+          cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [ "${{ inputs.is-dynamic-repo }}" = "true" ]; then
+            git add Package.swift
+            git commit -m "chore: bump to ${{ inputs.version }}
+
+            Update Package.swift with new download URL and checksum for version ${{ inputs.version }}"
+          else
+            git add Carthage/*.json PurchaseConnector.podspec Package.swift README.md
+            git commit -m "chore: bump version to ${{ inputs.version }}
+
+            Update all version references:
+            - Carthage JSONs with new version
+            - PurchaseConnector.podspec version  
+            - Package.swift version
+            - README.md with latest version info"
+          fi
+          
+          git push origin "${{ env.BUMP_BRANCH }}"
+
+      - name: Create Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+        run: |
+          cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+          
+          if [ "${{ inputs.is-dynamic-repo }}" = "true" ]; then
+            gh pr create \
+              --title "chore: bump to ${{ inputs.version }}" \
+              --body "**Automated Dynamic SPM Version Bump**
+
+            Updates Package.swift for release ${{ inputs.version }}.
+
+            **Files Updated:**
+            - Package.swift - Updated download URL and checksum" \
+              --head "${{ env.BUMP_BRANCH }}" \
+              --base ${{ inputs.target-branch }} \
+              --label "automated"
+          else
+            gh pr create \
+              --title "chore: bump version to ${{ inputs.version }}" \
+              --body "**Automated Version Bump**
+
+            Updates all version references for release ${{ inputs.version }}.
+
+            **Files Updated:**
+            - Carthage/*.json - Updated download URLs and checksums  
+            - PurchaseConnector.podspec - Bumped version number
+            - Package.swift - Updated SPM version and dependencies
+            - README.md - Updated documentation with new version" \
+              --head "${{ env.BUMP_BRANCH }}" \
+              --base ${{ inputs.target-branch }} \
+              --label "automated" \
+              --label "release"
+          fi
+
+      - name: Get PR number
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+        run: |
+          cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+          for i in {1..5}; do
+            PR_NUMBER=$(gh pr list --head "${{ env.BUMP_BRANCH }}" --json number --jq '.[0].number' 2>/dev/null || echo "null")
+            if [ "$PR_NUMBER" != "null" ] && [ -n "$PR_NUMBER" ]; then
+              echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+              break
+            fi
+            sleep $((i*2))
+            if [ $i -eq 5 ]; then
+              echo "❌ Failed to find PR after 5 attempts"
+              exit 1
+            fi
+          done
+
+      - name: Auto-approve PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.approver-token }}
+        run: |
+          if [ -z "${{ secrets.approver-token }}" ]; then
+            echo "❌ APPROVER_TOKEN not configured"
+            exit 1
+          fi
+          
+          for i in {1..3}; do
+            if [ "${{ inputs.is-dynamic-repo }}" = "true" ]; then
+              gh pr review "${{ inputs.repository }}#${{ env.PR_NUMBER }}" --approve --body "✅ **Automated Approval**
+
+              Dynamic SPM version bump approved for release ${{ inputs.version }}." 2>/dev/null && break
+            else
+              gh pr review "${{ env.PR_NUMBER }}" --approve --body "✅ **Automated Approval**
+
+              Version bump approved for release ${{ inputs.version }}." 2>/dev/null && break
+            fi
+            
+            if [ $i -eq 3 ]; then
+              echo "❌ Failed to approve PR after 3 attempts"
+              exit 1
+            fi
+            sleep 3
+          done
+
+      - name: Enable auto-merge and wait
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+        run: |
+          cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
+          
+          # Enable auto-merge
+          for i in {1..3}; do
+            gh pr merge "${{ env.PR_NUMBER }}" --auto --squash 2>/dev/null && break
+            if [ $i -eq 3 ]; then
+              echo "❌ Failed to enable auto-merge"
+              exit 1
+            fi
+            sleep 5
+          done
+          
+          # Wait for merge (5 minutes timeout)
+          for i in {1..30}; do
+            STATE=$(gh pr view "${{ env.PR_NUMBER }}" --json state --jq '.state')
+            
+            if [ "$STATE" = "MERGED" ]; then
+              echo "✅ PR merged successfully"
+              break
+            elif [ "$STATE" = "CLOSED" ]; then
+              echo "❌ PR was closed without merging"
+              exit 1
+            fi
+            
+            if [ $i -eq 30 ]; then
+              echo "❌ Timeout waiting for PR merge"
+              exit 1
+            fi
+            
+            sleep 10
+          done 

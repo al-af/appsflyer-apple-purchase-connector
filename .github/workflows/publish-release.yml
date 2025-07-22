@@ -1,0 +1,89 @@
+name: Publish Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      repository:
+        required: true
+        type: string
+      is-dynamic-repo:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        required: true
+      cocoapods-token:
+        required: false
+
+jobs:
+  publish-release:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ inputs.repository }}
+          token: ${{ secrets.github-token }}
+          ref: main
+
+      - name: Create release tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+        run: |
+          if [ "${{ inputs.is-dynamic-repo }}" = "true" ]; then
+            TAG_MESSAGE="Release ${{ inputs.version }} PurchaseConnector-Dynamic"
+          else
+            TAG_MESSAGE="Release ${{ inputs.version }}"
+          fi
+          
+          git tag -a "${{ inputs.version }}" -m "$TAG_MESSAGE"
+          git push origin "${{ inputs.version }}"
+
+      - name: Prepare artifacts (main repo only)
+        if: inputs.is-dynamic-repo == false
+        run: |
+          # Validate XCFrameworks exist
+          if [ ! -d PurchaseConnector.xcframework ] || [ ! -d Dynamic/PurchaseConnector.xcframework ]; then
+            echo "❌ XCFrameworks missing"
+            exit 1
+          fi
+          
+          # Create release artifacts
+          ./scripts/zip_artifacts.sh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: ${{ inputs.repository }}
+          tag_name: ${{ inputs.version }}
+          name: ${{ inputs.is-dynamic-repo && format('PurchaseConnector-Dynamic {0}', inputs.version) || inputs.version }}
+          draft: false
+          files: ${{ inputs.is-dynamic-repo == false && 'purchase-connector-static.xcframework.zip\npurchase-connector-dynamic.xcframework.zip' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+
+      - name: Publish to CocoaPods (main repo only)
+        if: inputs.is-dynamic-repo == false
+        continue-on-error: true
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.cocoapods-token }}
+        run: |
+          if [ -z "${{ secrets.cocoapods-token }}" ]; then
+            echo "⚠️ CocoaPods token not configured, skipping"
+            exit 0
+          fi
+          
+          gem install cocoapods
+          pod repo update
+          pod trunk push PurchaseConnector.podspec --allow-warnings --use-libraries
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ CocoaPods published successfully"
+          else
+            echo "⚠️ CocoaPods publishing failed"
+          fi 

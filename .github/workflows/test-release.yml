@@ -1,0 +1,176 @@
+name: Test Release Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Test version number'
+        required: true
+        default: '6.99.99'
+      dry_run:
+        description: 'Dry run mode (no real changes)'
+        type: boolean
+        default: true
+
+jobs:
+  test-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Extract test version
+        id: extract
+        run: |
+          VERSION="${{ github.event.inputs.test_version }}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Test version: $VERSION"
+
+      - name: Validate XCFrameworks
+        run: |
+          if [ ! -d PurchaseConnector.xcframework ] || [ ! -d Dynamic/PurchaseConnector.xcframework ]; then
+            echo "❌ XCFrameworks missing"
+            exit 1
+          fi
+          echo "✅ XCFrameworks validated"
+
+  test-main-repo-version-bump:
+    needs: test-setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Simulate version bump process
+        run: |
+          echo "🔄 SIMULATING: Main repo version bump for ${{ needs.test-setup.outputs.version }}"
+          echo "Would create branch: release-bump-${{ needs.test-setup.outputs.version }}"
+          echo "Would update files:"
+          echo "  - Carthage/*.json"
+          echo "  - PurchaseConnector.podspec"
+          echo "  - Package.swift"
+          echo "  - README.md"
+          echo "Would create PR with title: 'chore: bump version to ${{ needs.test-setup.outputs.version }}'"
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then
+            echo "⚠️ DRY_RUN=false: Would actually create real PR here!"
+          else
+            echo "✅ DRY_RUN=true: Simulation only"
+          fi
+
+      - name: Simulate approval process
+        run: |
+          echo "🤖 SIMULATING: Auto-approval process"
+          echo "Player 2 would approve with APPROVER_TOKEN"
+          echo "System would auto-merge PR"
+          echo "✅ Simulated approval and merge"
+
+  test-publish-main-release:
+    needs: [test-setup, test-main-repo-version-bump]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Simulate release publishing
+        run: |
+          echo "📦 SIMULATING: Main release publishing for ${{ needs.test-setup.outputs.version }}"
+          echo "Would create tag: ${{ needs.test-setup.outputs.version }}"
+          echo "Would zip XCFrameworks"
+          echo "Would create GitHub release with artifacts"
+          echo "Would push to CocoaPods"
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then
+            echo "⚠️ DRY_RUN=false: Would create REAL release!"
+          else
+            echo "✅ DRY_RUN=true: Simulation only"
+          fi
+
+  test-dynamic-repo-version-bump:
+    needs: [test-setup, test-publish-main-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Simulate dynamic repo process
+        run: |
+          echo "🔄 SIMULATING: Dynamic repo version bump for ${{ needs.test-setup.outputs.version }}"
+          echo "Would checkout: AppsFlyerSDK/PurchaseConnector-Dynamic"
+          echo "Would create branch: release-bump-${{ needs.test-setup.outputs.version }}"
+          echo "Would update Package.swift with new URL and checksum"
+          echo "Would create PR in dynamic repo"
+          echo "Player 2 would approve with APPROVER_TOKEN"
+          echo "System would auto-merge PR"
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then
+            echo "⚠️ DRY_RUN=false: Would modify REAL dynamic repo!"
+          else
+            echo "✅ DRY_RUN=true: Simulation only"
+          fi
+
+  test-publish-dynamic-release:
+    needs: [test-setup, test-dynamic-repo-version-bump]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Simulate dynamic release
+        run: |
+          echo "📦 SIMULATING: Dynamic release publishing for ${{ needs.test-setup.outputs.version }}"
+          echo "Would create tag in dynamic repo"
+          echo "Would create GitHub release in dynamic repo"
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then
+            echo "⚠️ DRY_RUN=false: Would create REAL dynamic release!"
+          else
+            echo "✅ DRY_RUN=true: Simulation only"
+          fi
+
+  test-summary:
+    needs: [test-setup, test-main-repo-version-bump, test-publish-main-release, test-dynamic-repo-version-bump, test-publish-dynamic-release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Summary
+        run: |
+          echo "===== TEST SUMMARY FOR ${{ needs.test-setup.outputs.version }} ====="
+          echo ""
+          echo "🧪 Test Results:"
+          
+          if [ "${{ needs.test-main-repo-version-bump.result }}" = "success" ]; then
+            echo "✅ Main repo version bump: SIMULATED SUCCESSFULLY"
+          else
+            echo "❌ Main repo version bump: FAILED"
+          fi
+          
+          if [ "${{ needs.test-publish-main-release.result }}" = "success" ]; then
+            echo "✅ Main release publishing: SIMULATED SUCCESSFULLY"
+          else
+            echo "❌ Main release publishing: FAILED"
+          fi
+          
+          if [ "${{ needs.test-dynamic-repo-version-bump.result }}" = "success" ]; then
+            echo "✅ Dynamic repo version bump: SIMULATED SUCCESSFULLY"
+          else
+            echo "❌ Dynamic repo version bump: FAILED"
+          fi
+          
+          if [ "${{ needs.test-publish-dynamic-release.result }}" = "success" ]; then
+            echo "✅ Dynamic release publishing: SIMULATED SUCCESSFULLY"
+          else
+            echo "❌ Dynamic release publishing: FAILED"
+          fi
+          
+          echo ""
+          echo "🔑 Token Check:"
+          echo "GITHUB_TOKEN: Available"
+          echo "APPROVER_TOKEN: $(if [ -n '${{ secrets.APPROVER_TOKEN }}' ]; then echo 'Available'; else echo 'MISSING'; fi)"
+          echo "PC_DYNAMIC_TOKEN: $(if [ -n '${{ secrets.PC_DYNAMIC_TOKEN }}' ]; then echo 'Available'; else echo 'MISSING'; fi)"
+          echo "COCOAPODS_TRUNK_TOKEN: $(if [ -n '${{ secrets.COCOAPODS_TRUNK_TOKEN }}' ]; then echo 'Available'; else echo 'MISSING'; fi)"
+          
+          echo ""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "✅ TEST COMPLETED SAFELY - No real changes made"
+          else
+            echo "⚠️ TEST RAN WITH REAL ACTIONS - Check for actual changes"
+          fi 
