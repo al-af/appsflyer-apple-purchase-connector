@@ -96,6 +96,7 @@ jobs:
           
           if [ "${{ inputs.is-dynamic-repo }}" = "true" ]; then
             gh pr create \
+              --repo "${{ inputs.repository }}" \
               --title "chore: bump to ${{ inputs.version }}" \
               --body "**Automated Dynamic SPM Version Bump**
 
@@ -107,6 +108,7 @@ jobs:
               --base ${{ inputs.target-branch }}"
           else
             gh pr create \
+              --repo "${{ inputs.repository }}" \
               --title "chore: bump version to ${{ inputs.version }}" \
               --body "**Automated Version Bump**
 
@@ -127,7 +129,7 @@ jobs:
         run: |
           cd ${{ inputs.is-dynamic-repo && 'dynamic-repo' || 'main-repo' }}
           for i in {1..5}; do
-            PR_NUMBER=$(gh pr list --head "${{ env.BUMP_BRANCH }}" --json number --jq '.[0].number' 2>/dev/null || echo "null")
+            PR_NUMBER=$(gh pr list --repo "${{ inputs.repository }}" --head "${{ env.BUMP_BRANCH }}" --json number --jq '.[0].number' 2>/dev/null || echo "null")
             if [ "$PR_NUMBER" != "null" ] && [ -n "$PR_NUMBER" ]; then
               echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
               break
@@ -154,7 +156,7 @@ jobs:
 
               Dynamic SPM version bump approved for release ${{ inputs.version }}." 2>/dev/null && break
             else
-              gh pr review "${{ env.PR_NUMBER }}" --approve --body "✅ **Automated Approval**
+              gh pr review "${{ inputs.repository }}#${{ env.PR_NUMBER }}" --approve --body "✅ **Automated Approval**
 
               Version bump approved for release ${{ inputs.version }}." 2>/dev/null && break
             fi
@@ -174,7 +176,7 @@ jobs:
           
           # Enable auto-merge
           for i in {1..3}; do
-            gh pr merge "${{ env.PR_NUMBER }}" --auto --squash 2>/dev/null && break
+            gh pr merge "${{ inputs.repository }}#${{ env.PR_NUMBER }}" --auto --squash 2>/dev/null && break
             if [ $i -eq 3 ]; then
               echo "❌ Failed to enable auto-merge"
               exit 1
@@ -184,7 +186,7 @@ jobs:
           
           # Wait for merge (5 minutes timeout)
           for i in {1..30}; do
-            STATE=$(gh pr view "${{ env.PR_NUMBER }}" --json state --jq '.state')
+            STATE=$(gh pr view "${{ inputs.repository }}#${{ env.PR_NUMBER }}" --json state --jq '.state')
             
             if [ "$STATE" = "MERGED" ]; then
               echo "✅ PR merged successfully"
