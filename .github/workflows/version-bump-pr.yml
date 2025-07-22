@@ -104,8 +104,7 @@ jobs:
             **Files Updated:**
             - Package.swift - Updated download URL and checksum" \
               --head "${{ env.BUMP_BRANCH }}" \
-              --base ${{ inputs.target-branch }} \
-              --label "automated"
+              --base ${{ inputs.target-branch }}"
           else
             gh pr create \
               --title "chore: bump version to ${{ inputs.version }}" \
@@ -119,9 +118,7 @@ jobs:
             - Package.swift - Updated SPM version and dependencies
             - README.md - Updated documentation with new version" \
               --head "${{ env.BUMP_BRANCH }}" \
-              --base ${{ inputs.target-branch }} \
-              --label "automated" \
-              --label "release"
+              --base ${{ inputs.target-branch }}"
           fi
 
       - name: Get PR number
