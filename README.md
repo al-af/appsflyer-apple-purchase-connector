@@ -7,6 +7,7 @@
 🛠 In order for us to provide optimal support, we would kindly ask you to submit any issues to
 support@appsflyer.com
 
+bla bla test
 > *When submitting an issue please specify your AppsFlyer sign-up (account) email , your app ID , production steps, logs, code snippets and any additional relevant information.
 
 ## Table Of Content
