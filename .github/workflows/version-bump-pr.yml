@@ -86,7 +86,7 @@ jobs:
             - README.md with latest version info"
           fi
           
-          git push origin "${{ env.BUMP_BRANCH }}"
+          git push --force origin "${{ env.BUMP_BRANCH }}"
 
       - name: Create Pull Request
         env:
